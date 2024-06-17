@@ -27,7 +27,7 @@ services:
 
   directus:
     container_name: directus
-    image: directus/directus:10.11.0
+    image: directus/directus:10.12.1
     env_file:
       - ./directus/.env
     environment:
