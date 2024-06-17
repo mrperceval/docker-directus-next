@@ -1,0 +1,69 @@
+services:
+  database:
+    container_name: database
+    image: postgis/postgis:13-master
+    # Required when running on platform other than amd64, like Apple M1/M2:
+    platform: linux/amd64
+    volumes:
+      - ./data/database:/var/lib/postgresql/data
+    env_file:
+      - ./directus/.env
+
+  cache:
+    container_name: cache
+    image: redis:6
+
+  directus:
+    container_name: directus
+    image: directus/directus:10.11.0
+    ports:
+      - 8055:8055
+    volumes:
+      - ./directus/uploads:/directus/uploads
+      - ./directus/extensions:/directus/extensions
+      - ./directus/snapshots:/directus/snapshots
+    depends_on:
+      - database
+      - cache
+    env_file:
+      - ./directus/.env
+    environment:
+      CACHE_ENABLED: 'true'
+      CACHE_STORE: 'redis'
+      REDIS: 'redis://cache:6379'
+      PUBLIC_URL: 'http://dev.api.example.com'
+      EXTENSIONS_AUTO_RELOAD: 'true'
+
+  next:
+    container_name: next
+    build:
+      context: ./next
+      target: dev
+    restart: always
+    command: pnpm run dev
+    env_file:
+      - ./next/.env.local
+    environment:
+      NODE_ENV: 'development'
+      DIRECTUS_SERVER_URL: 'http://directus:8055'
+      NEXT_PUBLIC_APP_URL: 'http://dev.example.com'
+      NEXT_PUBLIC_DIRECTUS_URL: 'http://dev.api.example.com'
+    volumes:
+      - ./next:/app
+      - /app/.next
+    ports:
+      - 3000:3000
+    depends_on:
+      - directus
+
+  nginx:
+    container_name: nginx
+    image: nginx:1.25.4
+    restart: always
+    volumes:
+      - ./nginx/dev.conf:/etc/nginx/nginx.conf
+    ports:
+      - '80:80'
+    depends_on:
+      - directus
+      - next

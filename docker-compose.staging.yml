@@ -1,0 +1,102 @@
+services:
+  database:
+    container_name: database
+    image: postgis/postgis:13-master
+    # Required when running on platform other than amd64, like Apple M1/M2:
+    platform: linux/amd64
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '50m'
+        max-file: '5'
+    volumes:
+      - ./data/database:/var/lib/postgresql/data
+    env_file:
+      - ./directus/.env
+
+  cache:
+    container_name: cache
+    image: redis:6
+    sysctls:
+      net.core.somaxconn: 1024
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '50m'
+        max-file: '5'
+
+  directus:
+    container_name: directus
+    image: directus/directus:10.11.0
+    env_file:
+      - ./directus/.env
+    environment:
+      CACHE_ENABLED: 'true'
+      CACHE_STORE: 'redis'
+      REDIS: 'redis://cache:6379'
+      PUBLIC_URL: 'https://api.example.com'
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '100m'
+        max-file: '10'
+    ports:
+      - 8055:8055
+    volumes:
+      - ./directus/uploads:/directus/uploads
+      - ./directus/extensions:/directus/extensions
+      - ./directus/snapshots:/directus/snapshots
+    depends_on:
+      - database
+      - cache
+
+  next:
+    container_name: next
+    build:
+      context: ./next
+      network: host
+      args:
+        DIRECTUS_SERVER_URL: 'http://0.0.0.0:8055'
+        NEXT_PUBLIC_APP_URL: 'https://staging.example.com'
+        NEXT_PUBLIC_DIRECTUS_URL: 'https://api.example.com'
+    restart: always
+    env_file:
+      - ./next/.env.local
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '100m'
+        max-file: '10'
+    environment:
+      NODE_ENV: 'production'
+      DIRECTUS_SERVER_URL: 'http://directus:8055'
+      NEXT_PUBLIC_APP_URL: 'https://staging.example.com'
+      NEXT_PUBLIC_DIRECTUS_URL: 'https://api.example.com'
+    ports:
+      - 3000:3000
+    depends_on:
+      - directus
+
+  nginx:
+    container_name: nginx
+    image: jonasal/nginx-certbot:latest
+    restart: unless-stopped
+    env_file:
+      - ./nginx/nginx-certbot.env
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '100m'
+        max-file: '10'
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - nginx_secrets:/etc/letsencrypt
+      - ./nginx/user_conf.d:/etc/nginx/user_conf.d
+      - ./nginx/.htpasswd:/etc/nginx/.htpasswd
+    depends_on:
+      - next
+
+volumes:
+  nginx_secrets:

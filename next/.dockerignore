@@ -1,0 +1,13 @@
+.notes
+.vscode
+.next
+node_modules
+.git
+.gitignore
+*.md
+next-env.d.ts
+
+*~
+*.log
+.DS_Store
+Thumbs.db
