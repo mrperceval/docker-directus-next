@@ -96,3 +96,26 @@ push_extensions() {
 - .DS_Store
 - *") $2 ./directus/ "$1:/home/web/directus/"
 }
+
+schema_snapshot_remote() {
+    ssh -t "$1" "docker compose exec directus npx directus schema snapshot --yes ./snapshots/tmp-snapshot.yaml"
+
+    if [ $? -eq 0 ]; then
+        local_snapshot_path="directus/snapshots/$1-$(date "+%F")"-"$(date "+%s").yaml"
+        # If successful, copy the snapshot file to local machine
+        scp "$1:/home/web/directus/snapshots/tmp-snapshot.yaml" "$local_snapshot_path"
+        # Check if scp command was successful
+        if [ $? -eq 0 ]; then
+            # Delete the temporary snapshot file on the remote server
+            ssh -t "$1" "rm /home/web/directus/snapshots/tmp-snapshot.yaml"
+            echo "Remote snapshot from: $1 to: $local_snapshot_path completed successfully."
+            return 0
+        else
+            echo "Failed to copy snapshot file. Please check SSH and SCP permissions."
+            return 1
+        fi
+    else
+        echo "Remote snapshot failed."
+        return 1
+    fi
+}
